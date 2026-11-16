@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="《造梦西游Ⅵ · 梦烬归墟》—— 零外部依赖的纯 HTML5 Canvas + WebAudio 东方墨金横版动作 RPG，五圣角色、五重劫关、多阶段首领与经典法宝炼器系统。" />
+  <meta name="theme-color" content="#0b0812" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23100b16'/%3E%3Crect x='6' y='6' width='52' height='52' rx='8' fill='%23b8221a' stroke='%23ffd868' stroke-width='2.5'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='%23fff4dc' font-family='KaiTi,STKaiti,serif' font-weight='bold'%3E%E6%A2%A6%3C/text%3E%3C/svg%3E" />
+  <title>造梦西游Ⅵ · 梦烬归墟</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 42%, #18111c 0%, #09070d 62%, #030205 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+    .stage-wrap {
+      position: relative;
+      width: min(100vw, calc(100vh * 16 / 9));
+      height: min(100vh, calc(100vw * 9 / 16));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.92), 0 0 0 1px rgba(220, 168, 78, 0.22);
+      border-radius: 4px;
+      overflow: hidden;
+      background: #050408;
+    }
+    canvas#gameCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      outline: none;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage-wrap">
+    <canvas id="gameCanvas" width="1280" height="720" tabindex="0"></canvas>
+  </div>
+
+  <script src="js/core.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/bg.js"></script>
+  <script src="js/rig.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/skills.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/bosses.js"></script>
+  <script src="js/stage.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/scenes.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

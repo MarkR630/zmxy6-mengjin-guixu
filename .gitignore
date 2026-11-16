@@ -1,0 +1,13 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# Logs / Temporary
+*.log
+chrome_tmp_profile/
+node_modules/
+tmp/
