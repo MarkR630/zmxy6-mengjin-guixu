@@ -737,7 +737,7 @@ function drawRig(ctx, x, y, dir, pose, S, o = {}) {
   const t = o.t || 0;
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(dir * S.scale, S.scale);
+  ctx.scale(dir * S.scale * (o.sx || 1), S.scale * (o.sy || 1));
   if (o.alpha !== undefined) ctx.globalAlpha = o.alpha;
   // sacred dharma halo (back)
   if (S.halo && !o.flat) {
