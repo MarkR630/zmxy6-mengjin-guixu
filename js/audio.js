@@ -108,27 +108,36 @@ const Snd = {
     const t = now + 0.005;
     switch (name) {
       case 'swing':
-        this.noise(t, 0.14, 0.22 * v, { type: 'bandpass', f: 500 * p, f2: 2600 * p, q: 1.6 });
+        this.noise(t, 0.13, 0.22 * v, { type: 'bandpass', f: 620 * p, f2: 3100 * p, q: 1.8 });
+        this.osc('triangle', 340 * p, t, 0.055, 0.07 * v, { slide: 130 * p });
         break;
       case 'swingHeavy':
-        this.noise(t, 0.26, 0.32 * v, { type: 'bandpass', f: 260 * p, f2: 1500 * p, q: 1.2 });
-        this.osc('sine', 140 * p, t, 0.2, 0.12 * v, { slide: 60 });
+        this.noise(t, 0.24, 0.34 * v, { type: 'bandpass', f: 280 * p, f2: 1750 * p, q: 1.3 });
+        this.osc('triangle', 220 * p, t, 0.11, 0.14 * v, { slide: 70 * p });
+        this.osc('sine', 135 * p, t, 0.22, 0.16 * v, { slide: 52 });
+        break;
+      case 'thrust':
+        this.noise(t, 0.14, 0.28 * v, { type: 'bandpass', f: 1100 * p, f2: 4600 * p, q: 2.2 });
+        this.osc('triangle', 680 * p, t, 0.08, 0.1 * v, { slide: 240 * p });
         break;
       case 'hit':
-        this.osc('sine', 190 * p, t, 0.13, 0.45 * v, { slide: 48 });
-        this.noise(t, 0.07, 0.32 * v, { type: 'bandpass', f: 2600 * p, q: 0.8 });
-        this.noise(t, 0.05, 0.2 * v, { type: 'highpass', f: 5000 });
+        this.osc('triangle', 320 * p, t, 0.032, 0.26 * v, { slide: 90 });
+        this.osc('sine', 185 * p, t, 0.12, 0.45 * v, { slide: 46 });
+        this.noise(t, 0.06, 0.3 * v, { type: 'bandpass', f: 2800 * p, q: 0.85 });
+        this.noise(t, 0.035, 0.22 * v, { type: 'highpass', f: 5200 });
         break;
       case 'hitHeavy':
-        this.osc('sine', 130 * p, t, 0.3, 0.8 * v, { slide: 32 });
-        this.noise(t, 0.28, 0.5 * v, { type: 'lowpass', f: 2200, f2: 180, q: 0.7, verb: 0.25 });
-        this.noise(t, 0.06, 0.3 * v, { type: 'highpass', f: 4000 });
+        this.osc('triangle', 240 * p, t, 0.045, 0.36 * v, { slide: 62 });
+        this.osc('sine', 125 * p, t, 0.28, 0.78 * v, { slide: 30 });
+        this.noise(t, 0.24, 0.48 * v, { type: 'lowpass', f: 2400, f2: 180, q: 0.7, verb: 0.24 });
+        this.noise(t, 0.05, 0.32 * v, { type: 'highpass', f: 4200 });
         break;
       case 'crit':
-        this.osc('sine', 150 * p, t, 0.26, 0.7 * v, { slide: 36 });
-        this.osc('triangle', 2100 * p, t, 0.32, 0.1 * v, { slide: 1500, verb: 0.3 });
-        this.osc('triangle', 3150 * p, t, 0.22, 0.06 * v, { verb: 0.3 });
-        this.noise(t, 0.12, 0.4 * v, { type: 'bandpass', f: 3500, q: 0.6 });
+        this.osc('triangle', 300 * p, t, 0.045, 0.32 * v, { slide: 80 });
+        this.osc('sine', 145 * p, t, 0.24, 0.7 * v, { slide: 36 });
+        this.osc('triangle', 1750 * p, t, 0.13, 0.09 * v, { slide: 1150, verb: 0.22 });
+        this.osc('triangle', 2600 * p, t, 0.1, 0.05 * v, { verb: 0.2 });
+        this.noise(t, 0.1, 0.36 * v, { type: 'bandpass', f: 3500, q: 0.7 });
         break;
       case 'jump':
         this.noise(t, 0.09, 0.08 * v, { type: 'highpass', f: 2500 });

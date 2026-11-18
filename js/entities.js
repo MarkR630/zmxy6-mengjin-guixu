@@ -112,6 +112,9 @@ class Attack {
     const dir = this.vx ? sign(this.vx) : (p ? sign(e.x - p.x || p.dir) : 1);
     const kbVal = this.kb ? (Math.abs(this.kb) * dir * (this.kb < 0 ? -1 : 1)) : 0;
     e.takeHit(dmg, isCrit, kbVal, this.up, this.stun, this.poiseDmg, this.color, G);
+    if (G && G.fx && !this.vx) {
+      G.fx(fxSlashLine(e.x + rand(-10, 10), e.y - 46 + rand(-14, 14), rand(-0.65, 0.65), isCrit ? 96 : 68, isCrit ? '#ffd868' : this.color, 0.14));
+    }
 
     if (p) {
       p.addCombo(G);
@@ -192,6 +195,8 @@ class Player {
     this.comboIdx = 0;
     this.comboResetT = 0;
     this.dashT = 0; this.dashCd = 0;
+    this.counterWindow = 0;
+    this.chargeT = 0; this.charging = false;
     this.poseAnim = null;
 
     // cooldowns
@@ -204,6 +209,10 @@ class Player {
 
     // visuals
     this.t = 0;
+    this.sx = 1; this.sy = 1;
+    this.landT = 0; this.landImp = 0;
+    this.airTime = 0;
+    this.walkPh = 0;
     this.pose = POSES[this.hero.idlePose].slice();
     this.trail = new Trail(this.hero.color, 0.17, '#ffffff');
     this.afterimages = [];
@@ -275,6 +284,7 @@ class Player {
 
   triggerPerfectDodge(G) {
     this._dodgeTriggered = true;
+    this.counterWindow = 0.85;
     Snd.play('bell'); Snd.play('dash');
     G.setSlowmo(0.28, 0.36);
     G.addFlash('#ffffff', 0.25, 0.16);
@@ -329,6 +339,7 @@ class Player {
     if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 5);
     if (this.invuln > 0) this.invuln = Math.max(0, this.invuln - dt);
     if (this.perfectDodgeWindow > 0) this.perfectDodgeWindow = Math.max(0, this.perfectDodgeWindow - dt);
+    if (this.counterWindow > 0) this.counterWindow = Math.max(0, this.counterWindow - dt);
     if (this.superArmor > 0) this.superArmor = Math.max(0, this.superArmor - dt);
     if (this.shieldT > 0) this.shieldT = Math.max(0, this.shieldT - dt);
     if (this.awakenT > 0) {
@@ -388,10 +399,10 @@ class Player {
         this.ghostT = 0.035;
         this.afterimages.push({ x: this.x, y: this.y, dir: this.dir, pose: this.pose.slice(), t: 0, col: this.hero.color });
       }
-    } else if (this.awakenT > 0) {
+    } else if (this.awakenT > 0 || (this.atkState && this.atkState.def.ghost && this.atkState.phase === 'active')) {
       this.ghostT -= dt;
-      if (this.ghostT <= 0 && (Math.abs(this.vx) > 120 || this.atkState)) {
-        this.ghostT = 0.07;
+      if (this.ghostT <= 0 && (Math.abs(this.vx) > 100 || this.atkState)) {
+        this.ghostT = this.atkState ? 0.03 : 0.07;
         this.afterimages.push({ x: this.x, y: this.y, dir: this.dir, pose: this.pose.slice(), t: 0, col: this.hero.color });
       }
     }
@@ -410,6 +421,7 @@ class Player {
       this._dodgeTriggered = false;
       this.vx = this.dir * 820;
       this.vy = Math.min(this.vy, 0);
+      this.sx = 1.18; this.sy = 0.86;
       Snd.play('dash');
       FX.dust(this.x, GROUND, 6, this.hero.color, 1.1);
     }
@@ -472,18 +484,47 @@ class Player {
         this.vy = -990;
         this.grounded = false;
         this.atkState = null;
+        this.sx = 0.84; this.sy = 1.18; this.landT = 0;
         Snd.play('jump');
         FX.dust(this.x, this.y, 4, '#b8b0a0', 0.6);
       }
     }
 
-    // Basic Attacks (J)
-    if (Input.buffered('attack', 180) && !this.poseAnim && this.dashT <= 0) {
+    // Basic Attacks & Special Attacks (J / Dash+J / S+J / Hold J / Counter)
+    if (Input.buffered('attack', 180) && !this.poseAnim) {
+      const canDashAtk = this.dashT > 0;
       const canChain = !this.atkState || this.atkState.phase === 'recover';
-      if (canChain) {
+      if (canDashAtk || canChain) {
         Input.consume('attack');
+        this.charging = false; this.chargeT = 0;
         if (moveDir) this.dir = moveDir;
-        if (!this.grounded) {
+        if (this.counterWindow > 0) {
+          this.counterWindow = 0;
+          this.dashT = 0;
+          this.invuln = Math.max(this.invuln, 0.26);
+          this.sx = 1.2; this.sy = 0.85;
+          Floaters.add(this.x, this.y - 96, '瞬影反击!', { color: '#98f0ff', size: 22, font: FONT_BRUSH });
+          this.startAttack({
+            windup: 0.035, active: 0.11, recover: 0.14,
+            pose0: P(0.12, 0.05, -0.45, 1.5, 0.2, 0.9, 0.4, -0.4, -0.4, -0.3, 1.6),
+            pose1: P(0.58, 0.12, 1.65, 0.0, -0.95, 0.3, 1.0, -0.7, -0.85, -0.3, 1.55),
+            pose2: P(0.38, 0.08, 1.45, 0.2, -0.7, 0.4, 0.75, -0.5, -0.6, -0.25, 1.5),
+            dmg: 1.85, crit: true, kb: 280, up: -260, reach: 152, h: 105, yoff: -54,
+            hitstop: 0.065, shake: 9, lunge: 420, snd: 'thrust', pitch: 1.18,
+            thrust: 160, slashLine: [-0.65, 145], ghost: true,
+          });
+        } else if (canDashAtk) {
+          this.dashT = 0;
+          this.sx = 1.22; this.sy = 0.84;
+          this.startAttack({
+            windup: 0.035, active: 0.11, recover: 0.14,
+            pose0: P(0.14, 0.05, -0.4, 1.45, 0.2, 0.9, 0.35, -0.35, -0.45, -0.3, 1.55),
+            pose1: P(0.58, 0.12, 1.62, 0.0, -0.95, 0.3, 0.98, -0.7, -0.85, -0.3, 1.57),
+            pose2: P(0.4, 0.08, 1.45, 0.15, -0.7, 0.4, 0.75, -0.5, -0.6, -0.25, 1.55),
+            dmg: 1.38, kb: 260, up: -130, reach: 155, h: 78, yoff: -52,
+            hitstop: 0.045, shake: 6, lunge: 460, snd: 'thrust', pitch: 1.08, thrust: 165, ghost: true,
+          });
+        } else if (!this.grounded) {
           if (Input.down('down')) {
             // Plunge Slam!
             this.atkState = { def: this.hero.plunge, t: 0, phase: 'plunge', isPlunge: true };
@@ -492,23 +533,78 @@ class Player {
             Snd.play('swingHeavy');
           } else {
             this.startAttack(this.hero.air);
-            this.vy = Math.min(this.vy, -140);
           }
         } else if (Input.down('up')) {
           this.startAttack(this.hero.launcher);
           this.comboIdx = 0;
+        } else if (Input.down('down')) {
+          this.comboIdx = 0;
+          this.startAttack({
+            windup: 0.08, active: 0.12, recover: 0.18,
+            pose0: POSES.castUp,
+            pose1: POSES.slam,
+            pose2: P(0.42, 0.15, 0.9, 0.25, -0.6, 0.5, 0.85, -0.75, -0.5, -0.25, 0.55),
+            dmg: 1.55, kb: 320, up: -420, reach: 240, h: 105, yoff: -46, centered: true,
+            vertCleave: 120, groundRing: 175, hitstop: 0.06, shake: 10, lunge: 40, snd: 'swingHeavy', pitch: 0.9,
+          });
         } else {
-          const def = this.hero.combo[this.comboIdx];
+          const idx = this.comboIdx;
+          const def = Object.assign({ pitch: 0.96 + idx * 0.07 }, this.hero.combo[idx]);
           this.startAttack(def);
-          this.comboIdx = (this.comboIdx + 1) % this.hero.combo.length;
+          this.comboIdx = (idx + 1) % this.hero.combo.length;
           this.comboResetT = 0.72;
         }
       }
     }
 
+    // Hold J to Charge Heavy Wave Attack
+    if (this.grounded && !this.atkState && !this.poseAnim && this.dashT <= 0 && this.moveLock <= 0) {
+      if (Input.down('attack')) {
+        const prevT = this.chargeT;
+        this.charging = true;
+        this.chargeT += dt;
+        if (prevT < 0.18 && this.chargeT >= 0.18) {
+          Snd.play('cast', { vol: 0.45, pitch: 1.35 });
+          Parts.spawn('ellipse', this.x, this.y - 46, { size: 42, grow: -120, color: '#ffffff', life: 0.18, lw: 2.5 });
+        }
+        if (this.chargeT > 0.1 && chance(0.65)) {
+          Parts.spawn('spark', this.x + rand(-28, 28), this.y - rand(20, 72), { color: this.hero.color, size: 2.8, life: 0.2 });
+        }
+        if (this.chargeT >= 0.42) {
+          this.charging = false; this.chargeT = 0;
+          this.sx = 1.16; this.sy = 0.87;
+          this.startAttack({
+            windup: 0.05, active: 0.13, recover: 0.18,
+            pose0: P(-0.22, -0.25, 2.9, -0.1, 2.3, 0.3, 0.45, -0.45, -0.45, -0.25, 3.5),
+            pose1: P(0.6, 0.2, 1.15, 0.1, -0.85, 0.4, 0.95, -0.85, -0.7, -0.3, 0.75),
+            pose2: P(0.4, 0.12, 0.9, 0.25, -0.6, 0.5, 0.75, -0.65, -0.5, -0.25, 0.55),
+            dmg: 2.15, kb: 440, up: -340, reach: 155, h: 120, yoff: -58,
+            hitstop: 0.08, shake: 12, lunge: 240, snd: 'swingHeavy', pitch: 0.85,
+            vertCleave: 135, horizSweep: 150, wave: { sp: 700, dmg: 1.2, life: 0.55 },
+          });
+        }
+      } else if (this.charging) {
+        if (this.chargeT >= 0.18) {
+          this.sx = 1.12; this.sy = 0.9;
+          this.startAttack({
+            windup: 0.05, active: 0.12, recover: 0.18,
+            pose0: P(-0.18, -0.22, 2.85, -0.1, 2.2, 0.3, 0.42, -0.42, -0.42, -0.25, 3.45),
+            pose1: P(0.58, 0.18, 1.18, 0.1, -0.8, 0.4, 0.92, -0.8, -0.68, -0.3, 0.78),
+            pose2: P(0.38, 0.1, 0.9, 0.25, -0.6, 0.5, 0.75, -0.65, -0.5, -0.25, 0.55),
+            dmg: 1.75, kb: 360, up: -280, reach: 145, h: 112, yoff: -56,
+            hitstop: 0.065, shake: 10, lunge: 210, snd: 'swingHeavy', pitch: 0.92,
+            vertCleave: 120, horizSweep: 135, wave: { sp: 640, dmg: 0.95, life: 0.48 },
+          });
+        }
+        this.charging = false; this.chargeT = 0;
+      }
+    } else {
+      this.charging = false; this.chargeT = 0;
+    }
+
     // Horizontal movement
     const spd = this.spd * (this.awakenT > 0 ? 1.2 : 1);
-    if (this.dashT <= 0 && this.moveLock <= 0 && !this.atkState && !this.poseAnim) {
+    if (this.dashT <= 0 && this.moveLock <= 0 && !this.atkState && !this.poseAnim && !this.charging) {
       if (moveDir) {
         this.dir = moveDir;
         const accel = this.grounded ? 4200 : 2800;
@@ -561,8 +657,93 @@ class Player {
     if (st.phase === 'windup' && st.t >= d.windup) {
       st.phase = 'active'; st.t = 0;
       if (d.lunge) this.vx = this.dir * d.lunge;
-      if (d.snd) Snd.play(d.snd);
+      const isThrust = !!d.thrust || (!d.crescent && !d.horizSweep && !d.spinWheel && !d.vertCleave && !d.slashLine && !d.pillar && (d.lunge || 0) >= 250);
+      if (d.snd) Snd.play(isThrust && d.snd === 'swingHeavy' ? 'thrust' : d.snd, { pitch: d.pitch || 1 });
       if (d.crescent) G.fx(fxCrescent(this.x, this.y + d.yoff, d.crescent[0], d.crescent[1], d.crescent[2], this.dir, this.hero.color, 0.2, 0.34));
+      if (d.horizSweep) G.fx(fxHorizSweep(this.x + this.dir * 14, this.y + d.yoff, d.horizSweep, this.dir, this.hero.color, 0.16));
+      if (d.spinWheel) G.fx(fxSpinWheel(this.x + this.dir * 42, this.y + d.yoff, d.spinWheel, this.dir, this.hero.color, 0.24));
+      if (d.vertCleave) G.fx(fxVertCleave(this.x + this.dir * 52, this.y - 6, d.vertCleave, this.dir, this.hero.color, 0.18));
+      if (d.slashLine) G.fx(fxSlashLine(this.x + this.dir * 48, this.y + d.yoff, this.dir * d.slashLine[0], d.slashLine[1], this.hero.color, 0.16));
+      if (isThrust) G.fx(fxThrust(this.x + this.dir * 16, this.y + d.yoff, d.thrust || d.reach * 1.1, this.dir, this.hero.color, 0.18));
+      if (d.groundRing) {
+        Snd.play('boom', { vol: 0.55 });
+        FX.groundRing(this.x, this.hero.color, d.groundRing, 0.36);
+        FX.dust(this.x, GROUND, 8, '#a09078', 1.2);
+      }
+      if (d.pillar) {
+        const pl = d.pillar, px = this.x + this.dir * pl.ox;
+        Snd.play('boom', { vol: 0.6 });
+        G.fx(fxPillar(px, GROUND, pl.w, pl.h, this.hero.color, 0.34));
+        FX.groundRing(px, this.hero.color, pl.w * 1.6, 0.32);
+        G.attack({
+          team: 'player', owner: this, x: px, y: GROUND - pl.h * 0.5, w: pl.w * 1.15, h: pl.h,
+          dmg: pl.dmg, kb: 220, up: -420, stun: 0.45, hitstop: 0.05, shake: 8, poiseDmg: 34, life: 0.14, color: this.hero.color,
+        });
+      }
+      if (d.multiHit && d.multiHit > 1) {
+        const dirM = this.dir, colM = this.hero.color;
+        for (let k = 1; k < d.multiHit; k++) {
+          G.after(k * 0.055, () => {
+            if (this.dead) return;
+            Snd.play('swing', { pitch: (d.pitch || 1) + k * 0.12, vol: 0.7 });
+            G.attack({
+              team: 'player', owner: this, ox: dirM * (d.reach * 0.5), oy: d.yoff, w: d.reach, h: d.h,
+              dmg: d.dmg, kb: d.kb * 0.5, up: d.up, stun: 0.25, hitstop: 0.018, shake: 2.5, poiseDmg: 10,
+              life: 0.05, color: colM,
+            });
+          });
+        }
+      }
+      if (d.doubleHit) {
+        const dir2 = this.dir, col2 = this.hero.color;
+        G.after(0.065, () => {
+          if (this.dead) return;
+          Snd.play('swing', { pitch: (d.pitch || 1) * 1.18 });
+          if (d.slashLine) G.fx(fxSlashLine(this.x + dir2 * 52, this.y + d.yoff, -dir2 * d.slashLine[0], d.slashLine[1] * 1.05, col2, 0.16));
+          else if (d.crescent) G.fx(fxCrescent(this.x, this.y + d.yoff, d.crescent[0] * 1.08, -d.crescent[1], -d.crescent[2], dir2, col2, 0.18, 0.32));
+          G.attack({
+            team: 'player', owner: this, ox: dir2 * (d.reach * 0.54), oy: d.yoff, w: d.reach * 1.05, h: d.h,
+            dmg: d.dmg * 0.65, kb: d.kb * 0.7, up: -160, stun: 0.3, hitstop: 0.028, shake: 4, poiseDmg: 12,
+            life: 0.08, color: col2,
+          });
+        });
+      }
+      if (d.slamWave) {
+        const col = this.hero.color;
+        G.attack({
+          team: 'player', owner: this, x: this.x + this.dir * 38, y: GROUND - 34, w: 54, h: 72,
+          vx: this.dir * 540, dmg: 0.85, kb: 260, up: -320, stun: 0.4, hitstop: 0.035, shake: 5.5,
+          life: 0.42, pierce: true, color: col,
+          draw(ctx) {
+            ctx.save(); ctx.translate(this.x, GROUND); ctx.scale(sign(this.vx), 1);
+            ctx.globalCompositeOperation = 'lighter';
+            drawGlow(ctx, 0, -24, 44, col, 0.75);
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.moveTo(-24, 0); ctx.lineTo(8, -56); ctx.lineTo(24, 0); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(6, -38); ctx.lineTo(14, 0); ctx.closePath(); ctx.fill();
+            ctx.restore();
+          },
+        });
+      }
+      if (d.wave) {
+        const wv = d.wave, col = this.hero.color;
+        G.attack({
+          team: 'player', owner: this, x: this.x + this.dir * 42, y: this.y - 54, w: 46, h: 96,
+          vx: this.dir * wv.sp, dmg: wv.dmg, kb: 220, up: -140, stun: 0.32, hitstop: 0.03, shake: 4.5,
+          life: wv.life, pierce: true, color: col,
+          draw(ctx) {
+            ctx.save(); ctx.translate(this.x, this.y); ctx.scale(sign(this.vx), 1);
+            ctx.globalCompositeOperation = 'lighter';
+            drawGlow(ctx, 0, 0, 52, col, 0.7);
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.arc(0, 0, 44, -1.25, 1.25); ctx.arc(-14, 0, 38, 1.15, -1.15, true); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(0, 0, 42, -1.1, 1.1); ctx.stroke();
+            ctx.restore();
+          },
+        });
+      }
       if (d.proj) {
         const pr = d.proj;
         G.attack({
@@ -583,8 +764,8 @@ class Player {
       // Spawn melee hitbox
       const self = this;
       G.attack({
-        team: 'player', owner: this, ox: this.dir * (d.reach * 0.52), oy: d.yoff, w: d.reach, h: d.h,
-        dmg: d.dmg, kb: d.kb, up: d.up, stun: 0.36, hitstop: d.hitstop, shake: d.shake, poiseDmg: d.dmg > 1.5 ? 36 : 16,
+        team: 'player', owner: this, ox: d.centered ? 0 : this.dir * (d.reach * 0.52), oy: d.yoff, w: d.reach, h: d.h,
+        dmg: d.dmg, crit: !!d.crit, kb: d.kb, up: d.up, stun: 0.36, hitstop: d.hitstop, shake: d.shake, poiseDmg: d.dmg > 1.5 ? 38 : 16,
         life: d.active, color: this.hero.color,
         onHit() { if (d.bounce && !self.grounded) self.vy = Math.min(self.vy, d.bounce); },
       });
@@ -622,13 +803,28 @@ class Player {
       this.vy = 0;
       this.grounded = true;
     }
-    if (!prevGrounded && this.grounded) {
+    if (!this.grounded) {
+      this.airTime += dt;
+    } else if (!prevGrounded) {
+      const imp = clamp(this.airTime * 1.8, 0.35, 1.0);
+      this.landT = 0.16;
+      this.landImp = imp;
+      this.sx = 1 + 0.16 * imp;
+      this.sy = 1 - 0.15 * imp;
+      this.airTime = 0;
       Snd.play('land');
       FX.dust(this.x, this.y, 4, '#9a8a70', 0.7);
+    } else {
+      this.airTime = 0;
     }
   }
 
   animatePose(dt) {
+    const spring = 1 - Math.exp(-16 * dt);
+    this.sx = lerp(this.sx, 1, spring);
+    this.sy = lerp(this.sy, 1, spring);
+    if (this.landT > 0) this.landT = Math.max(0, this.landT - dt);
+
     if (this.poseAnim) {
       const u = clamp(this.poseAnim.t / this.poseAnim.dur, 0, 1);
       poseLerp(this.poseAnim.p0, this.poseAnim.p1, Ease.outCubic(u), this.pose);
@@ -637,8 +833,15 @@ class Player {
     if (this.atkState) {
       const st = this.atkState, d = st.def;
       if (st.phase === 'plunge') { poseLerp(this.pose, POSES.slam, 1 - Math.exp(-20 * dt), this.pose); return; }
-      if (st.phase === 'windup') poseLerp(d.pose0, d.pose0, 1, this.pose);
-      else if (st.phase === 'active') {
+      if (st.phase === 'windup') {
+        const u = clamp(st.t / Math.max(0.01, d.windup), 0, 1);
+        const wPose = d.pose0.slice();
+        const pull = Ease.outCubic(u);
+        wPose[0] -= 0.08 * pull;
+        wPose[1] += 2.2 * pull;
+        wPose[11] -= 0.14 * pull;
+        poseLerp(this.pose, wPose, 1 - Math.exp(-28 * dt), this.pose);
+      } else if (st.phase === 'active') {
         const u = clamp(st.t / d.active, 0, 1);
         poseLerp(d.pose0, d.pose1, Ease.outExpo(u), this.pose);
         // record trail from weapon
@@ -654,20 +857,56 @@ class Player {
       }
       return;
     }
-    if (this.dashT > 0) {
+    if (this.charging && this.chargeT > 0.1) {
+      const cu = clamp((this.chargeT - 0.1) / 0.42, 0, 1);
+      const vib = Math.sin(this.t * 48) * 0.03 * cu;
+      const chP = P(-0.22 - 0.08 * cu + vib, -0.22, 2.75 + vib, -0.1, 2.1, 0.35, 0.52, -0.55, -0.48, -0.35, 3.45 - 0.15 * cu, 5.5 * cu);
+      poseLerp(this.pose, chP, 1 - Math.exp(-18 * dt), this.pose);
+    } else if (this.dashT > 0) {
       poseLerp(this.pose, POSES.dash, 1 - Math.exp(-26 * dt), this.pose);
     } else if (!this.grounded) {
-      poseLerp(this.pose, this.vy < 0 ? POSES.jump : POSES.fall, 1 - Math.exp(-16 * dt), this.pose);
+      const airU = clamp((this.vy + 220) / 520, 0, 1);
+      const airP = poseLerp(POSES.jump, POSES.fall, Ease.outCubic(airU));
+      poseLerp(this.pose, airP, 1 - Math.exp(-16 * dt), this.pose);
     } else if (Math.abs(this.vx) > 25) {
-      const ph = this.t * 14 * (Math.abs(this.vx) / 380);
-      const s = Math.sin(ph), c = Math.cos(ph);
-      const runP = P(0.32, 0.05, 0.7 - s * 0.8, -0.4, 0.5 + s * 0.8, -0.4, s * 0.85, -0.55 - Math.max(0, -c) * 0.4, -s * 0.85, -0.55 - Math.max(0, c) * 0.4, 2.0 + s * 0.2, Math.abs(c) * -3.5);
+      this.walkPh += dt * 14 * (Math.abs(this.vx) / 380);
+      const s = Math.sin(this.walkPh), c = Math.cos(this.walkPh);
+      const runP = P(
+        0.34 + c * 0.04,
+        0.04 - c * 0.05,
+        0.72 - s * 0.85, -0.42 - Math.max(0, -s) * 0.25,
+        0.52 + s * 0.85, -0.42 - Math.max(0, s) * 0.25,
+        s * 0.88, -0.58 - Math.max(0, -c) * 0.45,
+        -s * 0.88, -0.58 - Math.max(0, c) * 0.45,
+        2.0 + s * 0.22,
+        Math.abs(c) * -4.2
+      );
       poseLerp(this.pose, runP, 1 - Math.exp(-18 * dt), this.pose);
     } else {
+      const br = Math.sin(this.t * 3.1);
+      const br2 = Math.sin(this.t * 3.1 - 0.8);
       const base = POSES[this.hero.idlePose].slice();
-      base[1] = Math.sin(this.t * 3) * 1.4;
-      base[3] += Math.sin(this.t * 3) * 0.04;
+      base[0] += br2 * 0.025;
+      base[1] += br * 1.8;
+      base[2] -= br2 * 0.035;
+      base[3] += br2 * 0.06;
+      base[4] -= br * 0.05;
+      base[5] -= br2 * 0.04;
+      base[7] += br * 0.03;
+      base[8] -= br * 0.06;
+      base[9] -= br * 0.025;
+      base[10] -= br * 0.06;
+      base[11] += br2 * 0.04;
       poseLerp(this.pose, base, 1 - Math.exp(-12 * dt), this.pose);
+    }
+    if (this.landT > 0 && this.grounded && this.dashT <= 0) {
+      const lk = Math.sin((this.landT / 0.16) * PI) * this.landImp;
+      this.pose[0] += 0.18 * lk;
+      this.pose[1] += 5.5 * lk;
+      this.pose[7] += 0.24 * lk;
+      this.pose[8] -= 0.42 * lk;
+      this.pose[9] += 0.16 * lk;
+      this.pose[10] -= 0.36 * lk;
     }
   }
 
@@ -692,6 +931,7 @@ class Player {
     const blink = this.invuln > 0 && Math.floor(this.t * 28) % 2 === 0;
     drawRig(ctx, this.x, this.y, this.dir, this.pose, this.S, {
       t: this.t, grounded: this.grounded, rim, flash: this.flash,
+      sx: this.sx, sy: this.sy,
       alpha: blink ? 0.55 : 1, glowMul: this.awakenT > 0 ? 1.8 : 1, sway: clamp(-this.vx * 0.04, -12, 12),
     });
     this.trail.draw(ctx);

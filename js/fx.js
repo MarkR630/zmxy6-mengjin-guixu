@@ -325,6 +325,11 @@ const Floaters = {
 function fxCrescent(x, y, r, a0, a1, dir, color, life = 0.22, thick = 0.35) {
   // a filled crescent sweeping from a0 to a1 (radians, 0 = forward)
   let t = 0;
+  const flecks = Array.from({ length: 5 }, (_, i) => ({
+    f: (i + 0.5) / 5,
+    dr: rand(-6, 10),
+    sz: rand(1.5, 3.2),
+  }));
   return {
     layer: 'front',
     update(dt) { t += dt; return t < life; },
@@ -337,18 +342,221 @@ function fxCrescent(x, y, r, a0, a1, dir, color, life = 0.22, thick = 0.35) {
       ctx.globalCompositeOperation = 'lighter';
       const ea = lerp(a0, a1, Math.min(1, Ease.outCubic(u * 2.2)));
       const sa = lerp(a0, a1, Math.max(0, Ease.inQuad(u)));
-      const rr = r * (1 + u * 0.12);
+      const rr = r * (1 + u * 0.14);
       ctx.globalAlpha = k;
       const g = ctx.createRadialGradient(0, 0, rr * (1 - thick), 0, 0, rr);
       g.addColorStop(0, rgba(color, 0));
-      g.addColorStop(0.6, rgba(color, 0.55));
-      g.addColorStop(0.92, rgba('#ffffff', 0.95));
+      g.addColorStop(0.55, rgba(color, 0.52));
+      g.addColorStop(0.9, rgba('#ffffff', 0.96));
       g.addColorStop(1, rgba(color, 0));
       ctx.fillStyle = g;
       ctx.beginPath();
       if (a1 > a0) { ctx.arc(0, 0, rr, sa, ea); ctx.arc(0, 0, rr * (1 - thick), ea, sa, true); }
       else { ctx.arc(0, 0, rr, ea, sa); ctx.arc(0, 0, rr * (1 - thick), sa, ea, true); }
       ctx.closePath(); ctx.fill();
+      // crisp leading edge + spark flecks
+      ctx.strokeStyle = rgba('#ffffff', k * 0.85);
+      ctx.lineWidth = 2.2 * k;
+      ctx.beginPath();
+      if (a1 > a0) ctx.arc(0, 0, rr * 0.96, sa, ea);
+      else ctx.arc(0, 0, rr * 0.96, ea, sa);
+      ctx.stroke();
+      ctx.fillStyle = '#fff6d0';
+      for (const fl of flecks) {
+        const ang = lerp(sa, ea, fl.f);
+        const fr = rr + fl.dr + u * 18;
+        ctx.globalAlpha = k * 0.8;
+        ctx.beginPath();
+        ctx.arc(Math.cos(ang) * fr, Math.sin(ang) * fr, fl.sz * k, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    },
+  };
+}
+
+function fxThrust(x, y, len, dir, color, life = 0.18) {
+  let t = 0;
+  return {
+    layer: 'front',
+    update(dt) { t += dt; return t < life; },
+    draw(ctx) {
+      const u = t / life;
+      const k = 1 - u;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(dir, 1);
+      ctx.globalCompositeOperation = 'lighter';
+      const L = len * (0.65 + 0.55 * Ease.outExpo(u));
+      const w = 18 * k;
+      const g = ctx.createLinearGradient(0, 0, L, 0);
+      g.addColorStop(0, rgba(color, 0));
+      g.addColorStop(0.35, rgba(color, 0.75 * k));
+      g.addColorStop(0.85, rgba('#ffffff', 0.95 * k));
+      g.addColorStop(1, rgba('#ffffff', 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(-10, 0);
+      ctx.lineTo(L * 0.28, -w);
+      ctx.lineTo(L, 0);
+      ctx.lineTo(L * 0.28, w);
+      ctx.closePath();
+      ctx.fill();
+      // shock ring around thrust base
+      ctx.strokeStyle = rgba('#ffffff', 0.7 * k);
+      ctx.lineWidth = 2.2 * k;
+      ctx.beginPath();
+      ctx.ellipse(L * 0.22, 0, 7 + u * 10, 22 * (0.6 + u * 0.7), 0, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    },
+  };
+}
+
+function fxSlashLine(x, y, ang, len, color, life = 0.14) {
+  let t = 0;
+  return {
+    layer: 'front',
+    update(dt) { t += dt; return t < life; },
+    draw(ctx) {
+      const u = t / life;
+      const k = 1 - u;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ang);
+      ctx.globalCompositeOperation = 'lighter';
+      const L = len * (0.7 + 0.45 * Ease.outCubic(u));
+      ctx.globalAlpha = k;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(-L * 0.5, 0);
+      ctx.quadraticCurveTo(0, -6 * k, L * 0.5, 0);
+      ctx.quadraticCurveTo(0, 6 * k, -L * 0.5, 0);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(-L * 0.42, 0);
+      ctx.quadraticCurveTo(0, -2.6 * k, L * 0.42, 0);
+      ctx.quadraticCurveTo(0, 2.6 * k, -L * 0.42, 0);
+      ctx.fill();
+      ctx.restore();
+    },
+  };
+}
+
+function fxHorizSweep(x, y, len, dir, color, life = 0.16) {
+  let t = 0;
+  return {
+    layer: 'front',
+    update(dt) { t += dt; return t < life; },
+    draw(ctx) {
+      const u = t / life, k = 1 - u;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(dir, 1);
+      ctx.globalCompositeOperation = 'lighter';
+      const L = len * (0.55 + 0.55 * Ease.outExpo(u));
+      const g = ctx.createLinearGradient(-15, 0, L, 0);
+      g.addColorStop(0, rgba(color, 0));
+      g.addColorStop(0.3, rgba(color, 0.7 * k));
+      g.addColorStop(0.85, rgba('#ffffff', 0.95 * k));
+      g.addColorStop(1, rgba('#ffffff', 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(-12, 0);
+      ctx.quadraticCurveTo(L * 0.45, -13 * k, L, -2 * k);
+      ctx.quadraticCurveTo(L * 0.45, 11 * k, -12, 0);
+      ctx.fill();
+      ctx.strokeStyle = rgba('#ffffff', 0.85 * k);
+      ctx.lineWidth = 2.2 * k;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(L * 0.92, -1);
+      ctx.stroke();
+      ctx.restore();
+    },
+  };
+}
+
+function fxSpinWheel(x, y, r, dir, color, life = 0.24) {
+  let t = 0;
+  return {
+    layer: 'front',
+    update(dt) { t += dt; return t < life; },
+    draw(ctx) {
+      const u = t / life, k = 1 - u;
+      const rot = t * 28 * dir;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = k;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 7 * k;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, PI * 1.4); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.72, PI, PI * 2.35); ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5 * k;
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.94, 0.2, PI * 1.1); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.94, PI + 0.2, TAU + 0.9); ctx.stroke();
+      ctx.restore();
+    },
+  };
+}
+
+function fxVertCleave(x, y, h, dir, color, life = 0.18) {
+  let t = 0;
+  return {
+    layer: 'front',
+    update(dt) { t += dt; return t < life; },
+    draw(ctx) {
+      const u = t / life, k = 1 - u;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(dir, 1);
+      ctx.globalCompositeOperation = 'lighter';
+      const w = 22 * k;
+      const g = ctx.createLinearGradient(0, -h, 0, 12);
+      g.addColorStop(0, rgba(color, 0));
+      g.addColorStop(0.5, rgba(color, 0.78 * k));
+      g.addColorStop(0.95, rgba('#ffffff', 0.95 * k));
+      g.addColorStop(1, rgba(color, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.4, -h);
+      ctx.lineTo(w * 0.6, -h * 0.35);
+      ctx.lineTo(w, 6);
+      ctx.lineTo(-w * 0.6, 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = rgba('#ffffff', 0.9 * k);
+      ctx.lineWidth = 3 * k;
+      ctx.beginPath(); ctx.moveTo(2, -h * 0.9); ctx.lineTo(4, 4); ctx.stroke();
+      ctx.restore();
+    },
+  };
+}
+
+function fxPillar(x, y, w, h, color, life = 0.32) {
+  let t = 0;
+  return {
+    layer: 'front',
+    update(dt) { t += dt; return t < life; },
+    draw(ctx) {
+      const u = t / life, k = 1 - u;
+      const curW = w * (0.6 + 0.5 * Ease.outExpo(Math.min(1, u * 3))) * k;
+      const curH = h * Math.min(1, Ease.outExpo(u * 3.5));
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createLinearGradient(0, -curH, 0, 0);
+      g.addColorStop(0, rgba(color, 0));
+      g.addColorStop(0.35, rgba(color, 0.75 * k));
+      g.addColorStop(1, rgba('#ffffff', 0.95 * k));
+      ctx.fillStyle = g;
+      ctx.fillRect(-curW * 0.5, -curH, curW, curH);
+      ctx.fillStyle = rgba('#ffffff', 0.9 * k);
+      ctx.fillRect(-curW * 0.18, -curH * 0.95, curW * 0.36, curH * 0.95);
       ctx.restore();
     },
   };
